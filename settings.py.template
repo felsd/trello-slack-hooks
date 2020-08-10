@@ -1,0 +1,25 @@
+CHECK_INTERVAL_MINUTES = 1
+TRELLO_API_KEY = "XXX"
+TRELLO_API_SECRET = "XXX"
+SLACK_API_KEY = "XXX"
+
+USER_MAPPINGS = [
+    {
+        "display_name": "Johnny",
+        "trello_id": "abcdef123456789",
+        "slack_id": "0987654321fedcba",
+    },
+]
+
+HOOKS = [
+    {
+        "trello_boards": "ALL_STARRED",
+        "list_name": "to do",
+        "triggers": "created,moved",
+        "slack_message": {
+            "type": "direct",
+            "recipient": "CARD_ASSIGNMENT",
+            "message": "💡 Hi %name%, a card was assigned to you in *%board_name%*:\n\nTitle:\n%card_title%\n\nCard URL:\n%card_url%",
+        },
+    },
+]
