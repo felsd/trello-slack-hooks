@@ -32,3 +32,11 @@ Notes for hooks:
 - Possible values for `triggers` are `createCard` for newly created cards and/or `updateCard` for updated cards.
 - `type` in the slack message can be set to `direct` for a DM or to `channel` to post into a channel.
 - `recipient` can be set to `CARD_ASSIGNMENT` to notify all assigned users, or to specific user or group IDs (comma separated).
+
+## Placeholders in messages
+The following placeholders can be used in Slack messages:
+- `%recipient_name%`: Display name, defined in user mapping
+- `%board_name%`
+- `%card_title%`
+- `%card_url%`: Short URL to the card
+- `%card_action%`: Will be replaced with either `updated` or `created`
