@@ -169,13 +169,14 @@ def main():
     while True:
         try:
             for hook in hooks:
+                print("Executing hook...")
                 hook.execute(trello_api, slack_api)
         except KeyboardInterrupt:
             os._exit(0)
         except Exception:
             traceback.print_exc()
         finally:
-            time.sleep(settings.CHECK_INTERVAL_MINUTES * 60)
+            time.sleep(settings.CHECK_INTERVAL_SECONDS)
 
 
 if __name__ == "__main__":
