@@ -2,10 +2,12 @@ import argparse
 import os
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 
 import settings
 from slack import WebClient
-from trello import Board, TrelloClient
+from trello import Board, Card, TrelloClient
 
 
 def line(c="-"):
@@ -47,36 +49,26 @@ class TrelloApi:
 
     def get_starred_boards(self):
         """Returns all starred boards"""
-        boards = []
-        stars = self.client.list_stars()
-        for star in stars:
-            board = Board(client=self.client, board_id=star.board_id)
-            board.fetch()
-            boards.append(board)
-        return boards
+        return self.client.list_boards(board_filter="starred")
 
-    def get_lists_by_name(self, boards, name):
-        """Returns lists in the given `boards` matching `name` (case insensitive)"""
-        target_lists = []
-        for board in boards:
-            lists = board.all_lists()
-            for lst in lists:
-                if lst.name.lower() == name:
-                    target_lists.append(lst)
-        return target_lists
-
-    def is_new_card(self, card, since):
-        """The first 8 characters of the card id is a hexadecimal number.
-        Converted to a decimal from hexadecimal, the timestamp is a Unix timestamp"""
-        card_created = int(card.id[:8], 16)
-        return card_created > since
-
-    def is_moved_card(self, card, since):
-        card_movements = card.list_movements()
-        if len(card_movements) == 0:
-            return False
-        last_movement = card_movements[0]
-        return time.mktime(last_movement["datetime"].timetuple()) > since
+    def fetch_cards(self, triggers, board, target_list, since):
+        result = set()
+        cards = board.fetch_actions(triggers, since=since)
+        for card_data in cards:
+            list_name = (
+                card_data["data"]["listAfter"]["name"]
+                if "listAfter" in card_data["data"]
+                else card_data["data"]["list"]["name"]
+            )
+            if list_name.lower() != target_list.lower():
+                continue
+            card = Card(board, card_data["data"]["card"]["id"])
+            card.fetch(eager=False)
+            card.card_action = (
+                "created" if card_data["type"] == "createCard" else "updated"
+            )
+            result.add(card)
+        return result
 
 
 class SlackApi:
@@ -109,6 +101,7 @@ class SlackApi:
             message_text = message_text.replace("%board_name%", card.board.name)
             message_text = message_text.replace("%card_title%", card.name)
             message_text = message_text.replace("%card_url%", card.shortUrl)
+            message_text = message_text.replace("%card_action%", card.card_action)
             for recipient in recipients:
                 mapping = get_user_mapping(slack_id=recipient[1:])
                 if mapping is not None:
@@ -120,36 +113,37 @@ class SlackApi:
 
 class Hook:
     def __init__(self, hook):
-        self.last_check = int(time.time())
+        self.last_check = datetime.utcnow().replace(microsecond=0).isoformat()
         self.trello_boards = hook["trello_boards"]
         self.list_name = hook["list_name"]
         self.triggers = [x.strip() for x in hook["triggers"].split(",")]
         self.slack_message = hook["slack_message"]
+        self.executor = ThreadPoolExecutor()
 
-    def execute(self, trello_api, slack_api):
+    def execute(self, trello_api, slack_api, starred_boards):
         if self.trello_boards == "ALL_STARRED":
-            boards = trello_api.get_starred_boards()
+            boards = starred_boards
         else:
             boards = [
                 Board(client=trello_api.client, board_id=x.strip())
                 for x in self.trello_boards.split(",")
             ]
-            for board in boards:
-                board.fetch()
-        target_lists = trello_api.get_lists_by_name(boards, self.list_name)
-        for target_list in target_lists:
-            cards = target_list.list_cards()
+        futures = []
+        for board in boards:
+            futures.append(
+                self.executor.submit(
+                    trello_api.fetch_cards,
+                    self.triggers,
+                    board,
+                    self.list_name,
+                    f"{self.last_check}Z",
+                )
+            )
+        for future in as_completed(futures):
+            cards = future.result()
             for card in cards:
-                check_funcs = []
-                if "created" in self.triggers:
-                    check_funcs.append(trello_api.is_new_card)
-                if "moved" in self.triggers:
-                    check_funcs.append(trello_api.is_moved_card)
-                for func in check_funcs:
-                    if func(card, self.last_check):
-                        slack_api.send_card_notification(card, self.slack_message)
-                        break
-        self.last_check = int(time.time())
+                slack_api.send_card_notification(card, self.slack_message)
+        self.last_check = datetime.utcnow().replace(microsecond=0).isoformat()
 
 
 def main():
@@ -164,13 +158,25 @@ def main():
         trello_api.print_users()
         slack_api.print_users()
         os._exit(0)
-    # Start Hook execution
+    # Instantiate Hooks and start main loop
     hooks = [Hook(x) for x in settings.HOOKS]
+    any_starred = any(x.trello_boards == "ALL_STARRED" for x in hooks)
+    executor = ThreadPoolExecutor()
     while True:
         try:
+            # Fetch starred boards inside the loop as they might have changed,
+            # but only fetch them once
+            starred_boards = None
+            if any_starred:
+                starred_boards = trello_api.get_starred_boards()
+            # Hook execution
+            futures = []
             for hook in hooks:
-                print("Executing hook...")
-                hook.execute(trello_api, slack_api)
+                futures.append(
+                    executor.submit(hook.execute, trello_api, slack_api, starred_boards)
+                )
+            for future in futures:
+                future.result()
         except KeyboardInterrupt:
             os._exit(0)
         except Exception:
