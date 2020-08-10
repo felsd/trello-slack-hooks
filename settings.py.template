@@ -19,7 +19,7 @@ HOOKS = [
         "slack_message": {
             "type": "direct",
             "recipient": "CARD_ASSIGNMENT",
-            "message": "💡 Hi %name%, a card was assigned to you in *%board_name%*:\n\nTitle:\n%card_title%\n\nCard URL:\n%card_url%",
+            "message": "💡 Hi %recipient_name%, a card was assigned to you in *%board_name%*:\n\nTitle:\n%card_title%\n\nCard URL:\n%card_url%",
         },
     },
 ]

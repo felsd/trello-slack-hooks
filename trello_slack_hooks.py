@@ -112,7 +112,9 @@ class SlackApi:
             for recipient in recipients:
                 mapping = get_user_mapping(slack_id=recipient[1:])
                 if mapping is not None:
-                    msg = message_text.replace("%name%", mapping["display_name"])
+                    msg = message_text.replace(
+                        "%recipient_name%", mapping["display_name"]
+                    )
                     self.client.chat_postMessage(channel=recipient, text=msg)
 
 
