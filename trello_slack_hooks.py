@@ -109,6 +109,11 @@ class SlackApi:
                         "%recipient_name%", mapping["display_name"]
                     )
                 self.client.chat_postMessage(channel=recipient, text=msg)
+                print(
+                    "Sent a message to "
+                    f"{mapping['display_name'] if mapping else recipient} "
+                    f"[{card.name}]"
+                )
 
 
 class Hook:
