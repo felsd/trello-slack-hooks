@@ -85,7 +85,7 @@ class SlackApi:
             if not user["is_bot"] and "real_name" in user:
                 print(f"{user['real_name']}: {user['id']}")
 
-    def send_card_notification(self, card, slack_message):
+    def send_message(self, card, slack_message):
         """Notifies a user or channel about a new card via Slack message"""
         if slack_message["recipient"] == "CARD_ASSIGNMENT":
             recipients = [
@@ -108,7 +108,7 @@ class SlackApi:
                     msg = message_text.replace(
                         "%recipient_name%", mapping["display_name"]
                     )
-                    self.client.chat_postMessage(channel=recipient, text=msg)
+                self.client.chat_postMessage(channel=recipient, text=msg)
 
 
 class Hook:
@@ -142,7 +142,7 @@ class Hook:
         for future in as_completed(futures):
             cards = future.result()
             for card in cards:
-                slack_api.send_card_notification(card, self.slack_message)
+                slack_api.send_message(card, self.slack_message)
         self.last_check = datetime.utcnow().replace(microsecond=0).isoformat()
 
 
