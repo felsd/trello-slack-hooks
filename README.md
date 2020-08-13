@@ -28,8 +28,8 @@ Notes for user mappings:
 
 Notes for hooks:
 - `trello_boards` can be set to `ALL_STARRED` to watch for changes in all boards, or to specific channel IDs (comma separated).
-- `list_name` specifies the list that will be observed, only one list per hook is supported.
-- Possible values for `triggers` are `createCard` for newly created cards and/or `updateCard` for updated cards.
+- `list_name` specifies the list that will be observed, only one list per hook is supported or `ANY` for any list.
+- Possible values for `triggers` are `createCard` for newly created cards, `updateCard` for updated cards and/or `commentCard` for new comments on cards.
 - `type` in the slack message can be set to `direct` for a DM or to `channel` to post into a channel.
 - `recipient` can be set to `CARD_ASSIGNMENT` to notify all assigned users, or to specific user or group IDs (comma separated).
 
@@ -39,4 +39,4 @@ The following placeholders can be used in Slack messages:
 - `%board_name%`
 - `%card_title%`
 - `%card_url%`: Short URL to the card
-- `%card_action%`: Will be replaced with either `updated` or `created`
+- `%card_action%`: Will be replaced with either `updated`, `created` or `commented`

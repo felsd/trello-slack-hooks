@@ -60,13 +60,16 @@ class TrelloApi:
                 if "listAfter" in card_data["data"]
                 else card_data["data"]["list"]["name"]
             )
-            if list_name.lower() != target_list.lower():
+            if target_list != "ANY" and list_name.lower() != target_list.lower():
                 continue
             card = Card(board, card_data["data"]["card"]["id"])
             card.fetch(eager=False)
-            card.card_action = (
-                "created" if card_data["type"] == "createCard" else "updated"
-            )
+            if card_data["type"] == "createCard":
+                card.card_action = "created"
+            elif card_data["type"] == "updateCard":
+                card.card_action = "updated"
+            elif card_data["type"] == "commentCard":
+                card.card_action = "commented"
             result.add(card)
         return result
 
@@ -126,29 +129,32 @@ class Hook:
         self.executor = ThreadPoolExecutor()
 
     def execute(self, trello_api, slack_api, starred_boards):
-        if self.trello_boards == "ALL_STARRED":
-            boards = starred_boards
-        else:
-            boards = [
-                Board(client=trello_api.client, board_id=x.strip())
-                for x in self.trello_boards.split(",")
-            ]
-        futures = []
-        for board in boards:
-            futures.append(
-                self.executor.submit(
-                    trello_api.fetch_cards,
-                    self.triggers,
-                    board,
-                    self.list_name,
-                    f"{self.last_check}Z",
+        try:
+            if self.trello_boards == "ALL_STARRED":
+                boards = starred_boards
+            else:
+                boards = [
+                    Board(client=trello_api.client, board_id=x.strip())
+                    for x in self.trello_boards.split(",")
+                ]
+            futures = []
+            for board in boards:
+                futures.append(
+                    self.executor.submit(
+                        trello_api.fetch_cards,
+                        self.triggers,
+                        board,
+                        self.list_name,
+                        f"{self.last_check}Z",
+                    )
                 )
-            )
-        for future in as_completed(futures):
-            cards = future.result()
-            for card in cards:
-                slack_api.send_message(card, self.slack_message)
-        self.last_check = datetime.utcnow().replace(microsecond=0).isoformat()
+            for future in as_completed(futures):
+                cards = future.result()
+                for card in cards:
+                    slack_api.send_message(card, self.slack_message)
+            self.last_check = datetime.utcnow().replace(microsecond=0).isoformat()
+        except Exception:
+            traceback.print_exc()
 
 
 def main():
